@@ -1,125 +1,228 @@
+import 'package:dars_12/services/location_services.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_polyline_points/flutter_polyline_points.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:google_places_autocomplete_text_field/google_places_autocomplete_text_field.dart';
+import 'package:location/location.dart';
+import 'package:provider/provider.dart';
 
-void main() {
-  runApp(const MyApp());
+void main(List<String> args) async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await LocationServices.init();
+  runApp(MyApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  // This widget is the root of your application.
+class MyApp extends StatefulWidget {
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
-    );
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  late GoogleMapController myController;
+  final textController = TextEditingController();
+  final LocationServices locationServices = LocationServices();
+  final locationController = Location();
+  Map<PolylineId, Polyline> polylines = {};
+
+  final LatLng center = const LatLng(41.2, 69.2);
+  LatLng najotTalim = const LatLng(41.2856806, 69.2034646);
+
+  List<LatLng> points = [];
+
+  double? lat;
+  double? lng;
+  LatLng? curPlace;
+  MapType mapType = MapType.normal;
+
+  void onMapCreated(GoogleMapController controller) {
+    myController = controller;
   }
-}
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+  Future<void> fetchLocation() async {
+    locationController.onLocationChanged.listen((currentLocation) {
+      if (currentLocation.latitude != null &&
+          currentLocation.longitude != null) {
+        setState(() {
+          curPlace =
+              LatLng(currentLocation.latitude!, currentLocation.longitude!);
+        });
+      }
     });
   }
 
+  Future<List<LatLng>> getPolylinePoints() async {
+    final polylinePoints = PolylinePoints();
+
+    final result = await polylinePoints.getRouteBetweenCoordinates(
+        googleApiKey: 'AIzaSyBEjfX9jrWudgRcWl2scld4R7s0LtlaQmQ',
+        request: PolylineRequest(
+            origin: PointLatLng(curPlace!.latitude, curPlace!.longitude),
+            destination: PointLatLng(lat!, lng!),
+            mode: TravelMode.walking));
+
+    if (result.points.isNotEmpty) {
+      return result.points
+          .map((point) => LatLng(point.latitude, point.longitude))
+          .toList();
+    } else {
+      return [];
+    }
+  }
+
+  Future<void> generatePolyline(List<LatLng> pooints) async {
+    const id = PolylineId("polyline");
+
+    final polyline = Polyline(
+        polylineId: id, color: Colors.blueAccent, points: pooints, width: 5);
+    setState(() {
+      polylines[id] = polyline;
+    });
+  }
+
+  Future<void> initializeMap() async {
+    await fetchLocation();
+    final points = await getPolylinePoints();
+    generatePolyline(points);
+  }
+
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text(
-              'You have pushed the button this many times:',
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (context) => LocationServices()),
+      ],
+      builder: (context, child) {
+        return MaterialApp(
+          home: Scaffold(
+            body: Stack(
+              children: [
+                GoogleMap(
+                  myLocationButtonEnabled: true,
+                  polylines: Set<Polyline>.of(polylines.values),
+                  markers: {
+                    if (lat != null && lng != null)
+                      Marker(
+                        markerId: const MarkerId("search place"),
+                        icon: BitmapDescriptor.defaultMarker,
+                        position: LatLng(lat!, lng!),
+                      ),
+                    if (curPlace != null)
+                      Marker(
+                        markerId: const MarkerId("current location"),
+                        icon: BitmapDescriptor.defaultMarker,
+                        position: curPlace!,
+                      ),
+                  },
+                  mapType: mapType,
+                  initialCameraPosition:
+                      CameraPosition(target: najotTalim, zoom: 10),
+                  onMapCreated: onMapCreated,
+                ),
+                Positioned(
+                  top: 150,
+                  right: 20,
+                  child: DropdownButton(
+                    icon: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(15),
+                          color: Colors.amber,
+                        ),
+                        child: const Icon(
+                          Icons.map,
+                          color: Colors.white,
+                        )),
+                    items: [
+                      DropdownMenuItem(
+                        value: MapType.normal,
+                        child: TextButton(
+                            onPressed: () {}, child: const Text("Normal")),
+                      ),
+                      DropdownMenuItem(
+                        value: MapType.satellite,
+                        child: TextButton(
+                            onPressed: () {}, child: const Text("Sputnik")),
+                      ),
+                      DropdownMenuItem(
+                        value: MapType.terrain,
+                        child: TextButton(
+                            onPressed: () {}, child: const Text("Terrain")),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      setState(() {
+                        mapType = value!;
+                      });
+                    },
+                  ),
+                ),
+                Positioned(
+                    top: 40,
+                    child: Container(
+                      margin: const EdgeInsets.all(20),
+                      height: 50,
+                      width: 370,
+                      child: Container(
+                        color: Colors.grey.shade300,
+                        child: GooglePlacesAutoCompleteTextFormField(
+                            itmClick: (prediction) async {
+                              textController.text = prediction.description!;
+                              curPlace =
+                                  await locationServices.getCurrentLocation();
+                              setState(() {});
+
+                              // textController.selection = TextSelection.fromPosition(TextPosition(offset: prediction.description!.length));
+                            },
+                            isLatLngRequired: true,
+                            getPlaceDetailWithLatLng: (postalCodeResponse) {
+                              print(
+                                  "lat: ${postalCodeResponse.lat}, long: ${postalCodeResponse.lng}");
+                              setState(() {
+                                lat = double.parse(postalCodeResponse.lat!);
+                                lng = double.parse(postalCodeResponse.lng!);
+                              });
+                            },
+                            decoration: InputDecoration(
+                                suffixIcon: IconButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      textController.clear();
+                                      lat = null;
+                                      lng = null;
+                                    });
+                                  },
+                                  icon: const Icon(
+                                    Icons.clear,
+                                  ),
+                                ),
+                                border: const OutlineInputBorder(),
+                                hintText: "Search"),
+                            textEditingController: textController,
+                            googleAPIKey:
+                                'AIzaSyBEjfX9jrWudgRcWl2scld4R7s0LtlaQmQ'),
+                      ),
+                    )),
+              ],
             ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
+            floatingActionButton: lat != null
+                ? FloatingActionButton(
+                    backgroundColor: Colors.amber,
+                    onPressed: () {
+                      if (lat != null && lng != null) {
+                        initializeMap();
+                      }
+                    },
+                    child: const Icon(
+                      Icons.navigation_rounded,
+                      color: Colors.white,
+                    ),
+                  )
+                : null,
+          ),
+          debugShowCheckedModeBanner: false,
+        );
+      },
     );
   }
 }
